@@ -93,7 +93,7 @@ body{
 .tabs{display:flex;border:1px solid var(--line);border-radius:20px;overflow:hidden;margin-bottom:20px;}
 .tab{flex:1;padding:9px 0;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);background:var(--surface);}
 .tab.active{background:var(--ink);color:#fff;}
-input[type=email],input[type=text],input[type=date],select,textarea{
+input[type=email],input[type=text],input[type=date],input[type=time],input[type=number],input[type=password],select,textarea{
   width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;
   font-family:inherit;font-size:14px;background:var(--bg);color:var(--ink);
 }
@@ -194,7 +194,12 @@ tr:last-child td{border-bottom:none;}
 <div class="hazard-bar"></div>
 <div id="app"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+const SUPABASE_URL = "https://zkodxwvvcjvssgekvlcr.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_R7t1Cy97tfITeY1aBk1dIA_GoMxAsbF";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
 const DEFAULT_EMPLOYEE_NAMES = ["Andrea Posatini","Andrea Marquez","Osvaldo Garcia","Alexis Lopez","Rosana Delgado"];
 const DEFAULT_COMPANIES = ["Viento Andino","Viñas Marsili","Diamante Giuliani","Paramassi","Arcoiris","Grupo Andino"];
 
@@ -295,64 +300,146 @@ function escapeHtml(str){
 }
 
 async function loadConfig(){
-  let needsSave = false;
-  try{
-    const res = await window.storage.get('config', true);
-    config = JSON.parse(res.value);
-  }catch(e){
-    config = {
-      employees: DEFAULT_EMPLOYEE_NAMES.map(name => ({id: slugify(name), name, email:''})),
-      companies: DEFAULT_COMPANIES.slice(),
-      adminEmails: [],
-      adminPassword: null
-    };
-    needsSave = true;
+  const {data: companies, error: compError} = await supabaseClient
+    .from('companies').select('name').order('name');
+  if(compError) throw compError;
+
+  let employees = [];
+  if(currentUser && currentUser.role === 'admin'){
+    const {data, error} = await supabaseClient
+      .from('employees')
+      .select('id,name,email,can_log_salidas,active')
+      .order('name');
+    if(error) throw error;
+    employees = (data || []).map(e=>({
+      id:e.id, name:e.name, email:e.email || '', canLogSalidas:!!e.can_log_salidas, active:e.active!==false
+    }));
+  }else if(currentUser && currentUser.role === 'employee'){
+    employees = [{
+      id:currentUser.id,
+      name:currentUser.name,
+      email:currentUser.email || '',
+      canLogSalidas:!!currentUser.canLogSalidas
+    }];
   }
-  if(!config.companies.includes('Grupo Andino')){
-    config.companies.push('Grupo Andino');
-    needsSave = true;
-  }
-  if(typeof config.adminPassword === 'undefined'){
-    config.adminPassword = null;
-    needsSave = true;
-  }
-  config.employees.forEach(emp=>{
-    if(typeof emp.canLogSalidas === 'undefined'){
-      emp.canLogSalidas = (emp.id === 'osvaldo_garcia' || emp.id === 'alexis_lopez');
-      needsSave = true;
-    }
-  });
-  const alexis = config.employees.find(e=>e.id==='alexis_lopez');
-  if(alexis && !alexis.canLogSalidas){
-    alexis.canLogSalidas = true;
-    needsSave = true;
-  }
-  if(needsSave) await saveConfig();
+
+  config = {
+    employees,
+    companies:(companies || []).map(c=>c.name)
+  };
 }
-async function saveConfig(){
-  await window.storage.set('config', JSON.stringify(config), true);
+
+function mapSessionRow(s){
+  return {
+    id:s.id,
+    date:s.work_date,
+    company:s.company,
+    task:s.task,
+    seconds:Number(s.seconds || 0),
+    detail:s.detail || '',
+    place:s.place || '',
+    manualStart:s.manual_start ? String(s.manual_start).slice(0,5) : null,
+    manualEnd:s.manual_end ? String(s.manual_end).slice(0,5) : null
+  };
 }
+
 async function getSessions(employeeId){
-  try{
-    const res = await window.storage.get('sessions:'+employeeId, true);
-    return JSON.parse(res.value);
-  }catch(e){ return []; }
+  if(currentUser && currentUser.role === 'admin'){
+    const {data, error} = await supabaseClient
+      .from('sessions')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .order('work_date', {ascending:false});
+    if(error) throw error;
+    return (data || []).map(mapSessionRow);
+  }
+
+  const {data, error} = await supabaseClient.rpc('employee_get_sessions', {
+    p_email: currentUser.email
+  });
+  if(error) throw error;
+  return (data || []).map(mapSessionRow);
 }
-async function saveSessions(employeeId, sessions){
-  await window.storage.set('sessions:'+employeeId, JSON.stringify(sessions), true);
+
+async function insertSession(session){
+  if(currentUser.role === 'admin'){
+    const {error} = await supabaseClient.from('sessions').insert({
+      employee_id: session.employeeId,
+      company: session.company,
+      task: session.task,
+      work_date: session.date,
+      seconds: session.seconds,
+      detail: session.detail || '',
+      place: session.place || null,
+      manual_start: session.manualStart || null,
+      manual_end: session.manualEnd || null
+    });
+    if(error) throw error;
+    return;
+  }
+  const {error} = await supabaseClient.rpc('employee_insert_session', {
+    p_email: currentUser.email,
+    p_company: session.company,
+    p_task: session.task,
+    p_work_date: session.date,
+    p_seconds: session.seconds,
+    p_detail: session.detail || '',
+    p_place: session.place || null,
+    p_manual_start: session.manualStart || null,
+    p_manual_end: session.manualEnd || null
+  });
+  if(error) throw error;
 }
+
+async function updateSession(employeeId, sessionId, changes){
+  const {error} = await supabaseClient.from('sessions').update({
+    work_date: changes.date,
+    company: changes.company,
+    task: changes.task,
+    seconds: changes.seconds
+  }).eq('id', sessionId).eq('employee_id', employeeId);
+  if(error) throw error;
+}
+
+async function deleteSession(employeeId, sessionId){
+  const {error} = await supabaseClient.from('sessions')
+    .delete().eq('id', sessionId).eq('employee_id', employeeId);
+  if(error) throw error;
+}
+
 async function getActive(employeeId){
-  try{
-    const res = await window.storage.get('active:'+employeeId, true);
-    return JSON.parse(res.value);
-  }catch(e){ return null; }
+  const {data, error} = await supabaseClient.rpc('employee_get_active', {
+    p_email: currentUser.email
+  });
+  if(error) throw error;
+  const row = data && data[0];
+  if(!row) return null;
+  return {
+    company: row.company,
+    task: row.task,
+    accumulatedSeconds: Number(row.accumulated_seconds || 0),
+    running: !!row.running,
+    lastResumeTs: row.last_resume_ts ? new Date(row.last_resume_ts).getTime() : Date.now(),
+    startDate: row.start_date
+  };
 }
+
 async function saveActive(employeeId, obj){
   if(obj===null){
-    try{ await window.storage.delete('active:'+employeeId, true); }catch(e){}
-  }else{
-    await window.storage.set('active:'+employeeId, JSON.stringify(obj), true);
+    const {error} = await supabaseClient.rpc('employee_delete_active', {p_email: currentUser.email});
+    if(error) throw error;
+    return;
   }
+  const {error} = await supabaseClient.rpc('employee_save_active', {
+    p_email: currentUser.email,
+    p_company: obj.company,
+    p_task: obj.task,
+    p_accumulated_seconds: obj.accumulatedSeconds,
+    p_running: obj.running,
+    p_last_resume_ts: new Date(obj.lastResumeTs).toISOString(),
+    p_start_date: obj.startDate
+  });
+  if(error) throw error;
 }
 
 function elapsedSeconds(){
@@ -400,12 +487,6 @@ function renderLogin(){
         <input type="password" id="login-password" placeholder="••••••••">
       </div>` : ''}
       <button class="btn btn-primary btn-full" id="login-btn">Ingresar</button>
-      ${loginTab==='admin' && config.adminEmails.length===0 ? `
-        <div class="hint-msg">Todavía no hay un administrador configurado. Si ingresás tu email y elegís una contraseña acá, quedarán registrados como el acceso de administrador.</div>
-      ` : ''}
-      ${loginTab==='admin' && config.adminEmails.length>0 && !config.adminPassword ? `
-        <div class="hint-msg">Tu acceso todavía no tiene contraseña. Elegí una ahora y quedará guardada para la próxima vez.</div>
-      ` : ''}
     </div>
   </div>`;
 }
@@ -417,67 +498,68 @@ function attachLoginEvents(){
     const emailRaw = document.getElementById('login-email').value.trim();
     const email = emailRaw.toLowerCase();
     if(!email || !email.includes('@')){ loginError = 'Ingresá un email válido.'; render(); return; }
-    if(loginTab==='admin'){
-      const password = document.getElementById('login-password').value;
-      if(config.adminEmails.length===0){
-        if(!password){ loginError = 'Elegí una contraseña para crear el acceso de administrador.'; render(); return; }
-        config.adminEmails = [email];
-        config.adminPassword = password;
-        await saveConfig();
-        currentUser = {role:'admin', email};
+
+    try{
+      if(loginTab==='admin'){
+        const password = document.getElementById('login-password').value;
+        if(!password){ loginError = 'Ingresá tu contraseña.'; render(); return; }
+
+        const {data: authData, error: authError} = await supabaseClient.auth.signInWithPassword({email, password});
+        if(authError) throw authError;
+
+        const {data: adminRow, error: adminError} = await supabaseClient
+          .from('admins').select('email').eq('auth_user_id', authData.user.id).maybeSingle();
+        if(adminError || !adminRow){
+          await supabaseClient.auth.signOut();
+          loginError = 'Este usuario no tiene permiso de administrador.';
+          render();
+          return;
+        }
+
+        currentUser = {role:'admin', email: authData.user.email};
         loginError='';
+        await loadConfig();
         await loadAllSessions();
         render();
-        return;
-      }
-      if(!config.adminEmails.map(e=>e.toLowerCase()).includes(email)){
-        loginError = 'Ese email no está registrado como administrador.';
-        render();
-        return;
-      }
-      if(!config.adminPassword){
-        if(!password){ loginError = 'Elegí una contraseña para tu acceso de administrador.'; render(); return; }
-        config.adminPassword = password;
-        await saveConfig();
-        currentUser = {role:'admin', email};
+      }else{
+        const {data, error} = await supabaseClient.rpc('employee_login', {p_email: email});
+        if(error) throw error;
+        const emp = data && data[0];
+        if(!emp){
+          loginError = 'Tu email todavía no está vinculado a ningún empleado. Pedile al administrador que lo cargue.';
+          render();
+          return;
+        }
+        currentUser = {
+          role:'employee', id:emp.id, name:emp.name, email:emp.email,
+          canLogSalidas:!!emp.can_log_salidas
+        };
         loginError='';
-        await loadAllSessions();
+        await loadConfig();
+        activeTimer = await getActive(emp.id);
+        await refreshEmployeeSessions();
         render();
-        return;
+        startTicking();
       }
-      if(password !== config.adminPassword){
-        loginError = 'Contraseña incorrecta.';
-        render();
-        return;
-      }
-      currentUser = {role:'admin', email};
-      loginError='';
-      await loadAllSessions();
+    }catch(e){
+      console.error(e);
+      loginError = loginTab==='admin' ? 'Email o contraseña incorrectos.' : 'No se pudo ingresar. Intentá nuevamente.';
       render();
-    }else{
-      const emp = config.employees.find(e => (e.email||'').toLowerCase()===email);
-      if(!emp){
-        loginError = 'Tu email todavía no está vinculado a ningún empleado. Pedile al administrador que lo cargue.';
-        render();
-        return;
-      }
-      currentUser = {role:'employee', id: emp.id, name: emp.name, email: emp.email};
-      loginError='';
-      activeTimer = await getActive(emp.id);
-      await refreshEmployeeSessions();
-      render();
-      startTicking();
     }
   };
 }
 
-function logout(){
+async function logout(){
   stopTicking();
+  if(currentUser && currentUser.role==='admin'){
+    try{ await supabaseClient.auth.signOut(); }catch(e){}
+  }
   currentUser = null;
   activeTimer = null;
   loginError='';
   pendingCompany = null;
   pendingTask = null;
+  await loadConfig();
   render();
 }
 
@@ -681,19 +763,10 @@ function attachEmployeeEvents(){
       return;
     }
     const seconds = (endMin - startMin) * 60;
-    const sessions = await getSessions(currentUser.id);
-    sessions.push({
-      id: Date.now().toString(36)+Math.random().toString(36).slice(2,7),
-      date,
-      company,
-      task: 'Salida / trámite',
-      seconds,
-      detail,
-      place,
-      manualStart: startStr,
-      manualEnd: endStr
+    await insertSession({
+      date, company, task:'Salida / trámite', seconds, detail, place,
+      manualStart:startStr, manualEnd:endStr
     });
-    await saveSessions(currentUser.id, sessions);
     await refreshEmployeeSessions();
     render();
   };
@@ -701,16 +774,13 @@ function attachEmployeeEvents(){
 
 async function finishSession(){
   const totalSec = Math.round(elapsedSeconds());
-  const sessions = await getSessions(currentUser.id);
-  sessions.push({
-    id: Date.now().toString(36)+Math.random().toString(36).slice(2,7),
+  await insertSession({
     date: activeTimer.startDate || todayStr(),
     company: activeTimer.company,
     task: activeTimer.task,
     seconds: totalSec,
     detail: ''
   });
-  await saveSessions(currentUser.id, sessions);
   activeTimer = null;
   pendingCompany = null; pendingTask = null;
   await saveActive(currentUser.id, null);
@@ -810,12 +880,7 @@ function openEditSessionModal(empId, sessionId){
     const minutes = parseInt(document.getElementById('edit-minutes').value,10) || 0;
     const seconds = Math.max(0, hours*3600 + minutes*60);
 
-    const freshSessions = await getSessions(empId);
-    const idx = freshSessions.findIndex(s=>s.id===sessionId);
-    if(idx!==-1){
-      freshSessions[idx] = {...freshSessions[idx], date, company, task, seconds};
-      await saveSessions(empId, freshSessions);
-    }
+    await updateSession(empId, sessionId, {date, company, task, seconds});
     overlay.remove();
     await loadAllSessions();
     render();
@@ -833,7 +898,7 @@ async function loadAllSessions(){
 }
 
 function renderAdmin(){
-  const empRows = config.employees.map(emp=>`
+  const empRows = config.employees.filter(emp=>emp.active!==false).map(emp=>`
     <div class="emp-row" style="flex-wrap:wrap;">
       <div class="emp-name">${escapeHtml(emp.name)}</div>
       <input type="email" placeholder="email@empresa.com" value="${escapeHtml(emp.email||'')}" data-emp-id="${emp.id}" class="emp-email-input">
@@ -965,9 +1030,10 @@ function attachAdminEvents(){
       const id = btn.dataset.empId;
       const input = document.querySelector(`.emp-email-input[data-emp-id="${id}"]`);
       const email = input.value.trim().toLowerCase();
+      const {error} = await supabaseClient.from('employees').update({email: email || null}).eq('id', id);
+      if(error){ alert('No se pudo guardar el email: '+error.message); return; }
       const emp = config.employees.find(e=>e.id===id);
-      emp.email = email;
-      await saveConfig();
+      if(emp) emp.email = email;
       btn.textContent = 'Guardado ✓';
       setTimeout(()=>{ btn.textContent='Guardar'; }, 1500);
     };
@@ -977,8 +1043,9 @@ function attachAdminEvents(){
     cb.onchange = async ()=>{
       const emp = config.employees.find(e=>e.id===cb.dataset.empId);
       if(!emp) return;
+      const {error} = await supabaseClient.from('employees').update({can_log_salidas:cb.checked}).eq('id', emp.id);
+      if(error){ alert('No se pudo guardar el permiso: '+error.message); cb.checked=!cb.checked; return; }
       emp.canLogSalidas = cb.checked;
-      await saveConfig();
     };
   });
 
@@ -991,8 +1058,9 @@ function attachAdminEvents(){
         `¿Quitar a ${emp.name}?`,
         'Ya no va a poder ingresar con su email. Sus registros de horas ya cargados no se borran.',
         async ()=>{
-          config.employees = config.employees.filter(e=>e.id!==id);
-          await saveConfig();
+          const {error} = await supabaseClient.from('employees').update({active:false,email:null}).eq('id', id);
+          if(error){ alert('No se pudo quitar el empleado: '+error.message); return; }
+          await loadConfig();
           await loadAllSessions();
           render();
         }
@@ -1006,8 +1074,9 @@ function attachAdminEvents(){
     if(!name) return;
     let id = slugify(name);
     if(config.employees.some(e=>e.id===id)) id = id+'_'+Date.now().toString(36).slice(-4);
-    config.employees.push({id, name, email:''});
-    await saveConfig();
+    const {error} = await supabaseClient.from('employees').insert({id, name, email:null, can_log_salidas:false, active:true});
+    if(error){ alert('No se pudo agregar el empleado: '+error.message); return; }
+    await loadConfig();
     await loadAllSessions();
     render();
   };
@@ -1019,8 +1088,9 @@ function attachAdminEvents(){
         `¿Quitar ${name}?`,
         'Los registros de horas ya cargados para esta empresa no se borran.',
         async ()=>{
-          config.companies = config.companies.filter(c=>c!==name);
-          await saveConfig();
+          const {error} = await supabaseClient.from('companies').delete().eq('name', name);
+          if(error){ alert('No se pudo quitar la empresa: '+error.message); return; }
+          await loadConfig();
           render();
         }
       );
@@ -1031,8 +1101,9 @@ function attachAdminEvents(){
     const nameInput = document.getElementById('new-company-name');
     const name = nameInput.value.trim();
     if(!name || config.companies.includes(name)) return;
-    config.companies.push(name);
-    await saveConfig();
+    const {error} = await supabaseClient.from('companies').insert({name});
+    if(error){ alert('No se pudo agregar la empresa: '+error.message); return; }
+    await loadConfig();
     render();
   };
 
@@ -1040,8 +1111,8 @@ function attachAdminEvents(){
     const input = document.getElementById('new-admin-password');
     const value = input.value.trim();
     if(!value) return;
-    config.adminPassword = value;
-    await saveConfig();
+    const {error} = await supabaseClient.auth.updateUser({password:value});
+    if(error){ alert('No se pudo cambiar la contraseña: '+error.message); return; }
     input.value = '';
     document.getElementById('password-changed-msg').style.display = 'block';
     setTimeout(()=>{
@@ -1064,9 +1135,7 @@ function attachAdminEvents(){
         '¿Borrar este registro?',
         'Esta acción no se puede deshacer.',
         async ()=>{
-          const sessions = await getSessions(empId);
-          const updated = sessions.filter(s=>s.id!==sessionId);
-          await saveSessions(empId, updated);
+          await deleteSession(empId, sessionId);
           await loadAllSessions();
           render();
         }
@@ -1093,9 +1162,28 @@ function attachAdminEvents(){
 /* ---------------- INIT ---------------- */
 (async function init(){
   document.getElementById('app').innerHTML = '<div class="login-wrap"><div class="card login-card">Cargando…</div></div>';
-  await loadConfig();
-  render();
-})();
+  try{
+    const {data:{session}} = await supabaseClient.auth.getSession();
+    if(session && session.user){
+      const {data: adminRow} = await supabaseClient.from('admins')
+        .select('email').eq('auth_user_id', session.user.id).maybeSingle();
+      if(adminRow){
+        currentUser = {role:'admin', email:session.user.email};
+        await loadConfig();
+        await loadAllSessions();
+        render();
+        return;
+      }
+    }
+    await loadConfig();
+    render();
+  }catch(e){
+    console.error(e);
+    loginError = 'No se pudo conectar con la base de datos.';
+    config = {employees:[], companies:[]};
+    render();
+  }
+})();;
 </script>
 </body>
 </html>
