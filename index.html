@@ -195,6 +195,7 @@ tr:last-child td{border-bottom:none;}
 <div id="app"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 const SUPABASE_URL = "https://zkodxwvvcjvssgekvlcr.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_R7t1Cy97tfITeY1aBk1dIA_GoMxAsbF";
@@ -209,7 +210,7 @@ const ROLE_TASKS = {
   contador2: [
     "Flujo de fondos / cash flow",
     "Supervisión de liquidación de sueldos",
-    "Registros históricos de tesorería",
+    "Auditoria contable de info. modulo Ventas-Tesoreria-Compras en Tango",
     "Balances",
     "Inspecciones",
     "Calificaciones bancarias",
@@ -295,6 +296,21 @@ function formatHoursShort(totalSeconds){
   const h = totalSeconds/3600;
   return h.toFixed(2)+' h';
 }
+function formatTimeAR(iso){
+  if(!iso) return '—';
+  try{
+    return new Intl.DateTimeFormat('es-AR', {
+      hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false,
+      timeZone:'America/Argentina/Buenos_Aires'
+    }).format(new Date(iso));
+  }catch(e){ return '—'; }
+}
+function sessionStartTime(s){
+  return s.manualStart || formatTimeAR(s.startedAt);
+}
+function sessionEndTime(s){
+  return s.manualEnd || formatTimeAR(s.endedAt);
+}
 function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -339,7 +355,9 @@ function mapSessionRow(s){
     detail:s.detail || '',
     place:s.place || '',
     manualStart:s.manual_start ? String(s.manual_start).slice(0,5) : null,
-    manualEnd:s.manual_end ? String(s.manual_end).slice(0,5) : null
+    manualEnd:s.manual_end ? String(s.manual_end).slice(0,5) : null,
+    startedAt:s.started_at || null,
+    endedAt:s.ended_at || null
   };
 }
 
@@ -354,7 +372,7 @@ async function getSessions(employeeId){
     return (data || []).map(mapSessionRow);
   }
 
-  const {data, error} = await supabaseClient.rpc('employee_get_sessions', {
+  const {data, error} = await supabaseClient.rpc('employee_get_sessions_v2', {
     p_email: currentUser.email
   });
   if(error) throw error;
@@ -372,12 +390,14 @@ async function insertSession(session){
       detail: session.detail || '',
       place: session.place || null,
       manual_start: session.manualStart || null,
-      manual_end: session.manualEnd || null
+      manual_end: session.manualEnd || null,
+      started_at: session.startedAt || null,
+      ended_at: session.endedAt || null
     });
     if(error) throw error;
     return;
   }
-  const {error} = await supabaseClient.rpc('employee_insert_session', {
+  const {error} = await supabaseClient.rpc('employee_insert_session_v2', {
     p_email: currentUser.email,
     p_company: session.company,
     p_task: session.task,
@@ -386,7 +406,9 @@ async function insertSession(session){
     p_detail: session.detail || '',
     p_place: session.place || null,
     p_manual_start: session.manualStart || null,
-    p_manual_end: session.manualEnd || null
+    p_manual_end: session.manualEnd || null,
+    p_started_at: session.startedAt || null,
+    p_ended_at: session.endedAt || null
   });
   if(error) throw error;
 }
@@ -408,7 +430,7 @@ async function deleteSession(employeeId, sessionId){
 }
 
 async function getActive(employeeId){
-  const {data, error} = await supabaseClient.rpc('employee_get_active', {
+  const {data, error} = await supabaseClient.rpc('employee_get_active_v2', {
     p_email: currentUser.email
   });
   if(error) throw error;
@@ -420,7 +442,8 @@ async function getActive(employeeId){
     accumulatedSeconds: Number(row.accumulated_seconds || 0),
     running: !!row.running,
     lastResumeTs: row.last_resume_ts ? new Date(row.last_resume_ts).getTime() : Date.now(),
-    startDate: row.start_date
+    startDate: row.start_date,
+    startedAt: row.started_at || null
   };
 }
 
@@ -430,14 +453,15 @@ async function saveActive(employeeId, obj){
     if(error) throw error;
     return;
   }
-  const {error} = await supabaseClient.rpc('employee_save_active', {
+  const {error} = await supabaseClient.rpc('employee_save_active_v2', {
     p_email: currentUser.email,
     p_company: obj.company,
     p_task: obj.task,
     p_accumulated_seconds: obj.accumulatedSeconds,
     p_running: obj.running,
     p_last_resume_ts: new Date(obj.lastResumeTs).toISOString(),
-    p_start_date: obj.startDate
+    p_start_date: obj.startDate,
+    p_started_at: obj.startedAt || null
   });
   if(error) throw error;
 }
@@ -709,7 +733,7 @@ function attachEmployeeEvents(){
       }
       task = custom;
     }
-    activeTimer = {company, task, accumulatedSeconds:0, running:true, lastResumeTs: Date.now(), startDate: todayStr()};
+    activeTimer = {company, task, accumulatedSeconds:0, running:true, lastResumeTs: Date.now(), startDate: todayStr(), startedAt: new Date().toISOString()};
     await saveActive(currentUser.id, activeTimer);
     pendingCompany = null; pendingTask = null;
     render(); startTicking();
@@ -779,7 +803,9 @@ async function finishSession(){
     company: activeTimer.company,
     task: activeTimer.task,
     seconds: totalSec,
-    detail: ''
+    detail: '',
+    startedAt: activeTimer.startedAt || null,
+    endedAt: new Date().toISOString()
   });
   activeTimer = null;
   pendingCompany = null; pendingTask = null;
@@ -954,14 +980,16 @@ function renderAdmin(){
 
     rowsHtml = rows.length===0 ? `<div class="empty-state">No hay registros para este filtro.</div>` : `
       <table>
-        <thead><tr><th>Fecha</th><th>Empleado</th><th>Empresa</th><th>Tarea</th><th>Lugar</th><th>Duración</th><th></th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Empleado</th><th>Empresa</th><th>Tarea</th><th>Inicio</th><th>Fin</th><th>Lugar</th><th>Duración</th><th></th></tr></thead>
         <tbody>
           ${rows.map(r=>`
             <tr>
               <td>${niceDate(r.date)}</td>
               <td>${escapeHtml(r.empName)}</td>
               <td><span class="pill">${escapeHtml(r.company)}</span></td>
-              <td>${escapeHtml(r.task||'—')}${r.manualStart ? ` <span class="detail-text">(${r.manualStart}–${r.manualEnd})</span>` : ''}</td>
+              <td>${escapeHtml(r.task||'—')}</td>
+              <td class="mono">${sessionStartTime(r)}</td>
+              <td class="mono">${sessionEndTime(r)}</td>
               <td class="detail-text">${escapeHtml(r.place||'—')}${r.detail ? `<br>${escapeHtml(r.detail)}` : ''}</td>
               <td class="mono">${formatHMS(r.seconds)}</td>
               <td style="white-space:nowrap;">
@@ -1016,14 +1044,67 @@ function renderAdmin(){
       <div class="field"><label class="field-label">Desde</label><input type="date" id="filter-from" value="${filters.from}"></div>
       <div class="field"><label class="field-label">Hasta</label><input type="date" id="filter-to" value="${filters.to}"></div>
     </div>
+    <div style="display:flex;justify-content:flex-end;margin:-4px 0 16px;">
+      <button class="btn btn-outline" id="export-excel-btn">⬇ Descargar Excel</button>
+    </div>
     ${totalsHtml}
     <div style="margin-top:14px;">${rowsHtml}</div>
   </div>
   `;
 }
 
+function getFilteredAdminRows(){
+  const filters = adminReportFilters || {employee:'all', company:'all', from: todayStr(), to: todayStr()};
+  const rows = [];
+  if(!allSessionsCache) return rows;
+  for(const emp of config.employees){
+    if(filters.employee!=='all' && filters.employee!==emp.id) continue;
+    for(const s of (allSessionsCache[emp.id] || [])){
+      if(s.date < filters.from || s.date > filters.to) continue;
+      if(filters.company!=='all' && s.company!==filters.company) continue;
+      rows.push({...s, empName:emp.name, empId:emp.id});
+    }
+  }
+  rows.sort((a,b)=> a.date===b.date ? (sessionStartTime(a) < sessionStartTime(b) ? -1 : 1) : (a.date<b.date?1:-1));
+  return rows;
+}
+
+function exportAdminExcel(){
+  const rows = getFilteredAdminRows();
+  if(!rows.length){
+    alert('No hay registros para exportar con los filtros actuales.');
+    return;
+  }
+  if(typeof XLSX === 'undefined'){
+    alert('No se pudo cargar el módulo de Excel. Recargá la página e intentá nuevamente.');
+    return;
+  }
+  const data = rows.map(r=>({
+    'Fecha': niceDate(r.date),
+    'Empleado': r.empName,
+    'Empresa': r.company,
+    'Tarea': r.task || '',
+    'Hora inicio': sessionStartTime(r)==='—' ? '' : sessionStartTime(r),
+    'Hora fin': sessionEndTime(r)==='—' ? '' : sessionEndTime(r),
+    'Duración': formatHMS(r.seconds),
+    'Horas decimales': Number((r.seconds/3600).toFixed(4)),
+    'Lugar': r.place || '',
+    'Detalle': r.detail || ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [
+    {wch:12},{wch:24},{wch:20},{wch:52},{wch:13},{wch:13},{wch:13},{wch:16},{wch:24},{wch:45}
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Horas');
+  const f = adminReportFilters || {from:todayStr(),to:todayStr()};
+  XLSX.writeFile(wb, `control_horas_${f.from}_${f.to}.xlsx`);
+}
+
 function attachAdminEvents(){
   document.getElementById('logout-btn').onclick = logout;
+  const exportBtn = document.getElementById('export-excel-btn');
+  if(exportBtn) exportBtn.onclick = exportAdminExcel;
 
   document.querySelectorAll('.save-email-btn').forEach(btn=>{
     btn.onclick = async ()=>{
