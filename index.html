@@ -239,6 +239,12 @@ const ROLE_TASKS = {
     "Saldos proveedores",
     "Archivo físico y digital"
   ],
+  /* Igual que "auxiliar", pero con "Carga de comprobantes" en lugar de "Carga de facturas" (solo Andrea Marquez). */
+  auxiliar_comprobantes: [
+    "Carga de comprobantes",
+    "Saldos proveedores",
+    "Archivo físico y digital"
+  ],
   general: [
     "Tarea administrativa",
     "Atención de consultas",
@@ -251,12 +257,26 @@ const EMP_ROLE_BY_ID = {
   rosana_delgado: 'contador2',
   andrea_posatini: 'administrativo_senior',
   osvaldo_garcia: 'rrhh',
-  andrea_marquez: 'auxiliar',
+  andrea_marquez: 'auxiliar_comprobantes',
   alexis_lopez: 'auxiliar'
 };
 function getTaskOptions(empId){
   const role = EMP_ROLE_BY_ID[empId] || 'general';
   return ROLE_TASKS[role] || ROLE_TASKS.general;
+}
+
+/* Empresas que solo ven algunos empleados. Las empresas que no figuran acá las ven todos.
+   La comparación ignora mayúsculas y acentos. */
+const COMPANY_ALLOWED_EMPLOYEES = {
+  "La quinta de Olivos del Acequion": ['rosana_delgado','osvaldo_garcia','andrea_posatini']
+};
+function companyKey(name){ return slugify(String(name || '')); }
+function getCompaniesFor(empId){
+  const companies = (config && config.companies) ? config.companies : [];
+  return companies.filter(c=>{
+    const rule = Object.keys(COMPANY_ALLOWED_EMPLOYEES).find(k=>companyKey(k)===companyKey(c));
+    return !rule || COMPANY_ALLOWED_EMPLOYEES[rule].includes(empId);
+  });
 }
 
 let config = null;
@@ -414,12 +434,16 @@ async function insertSession(session){
 }
 
 async function updateSession(employeeId, sessionId, changes){
-  const {error} = await supabaseClient.from('sessions').update({
+  const payload = {
     work_date: changes.date,
     company: changes.company,
     task: changes.task,
     seconds: changes.seconds
-  }).eq('id', sessionId).eq('employee_id', employeeId);
+  };
+  if(changes.manualStart !== undefined) payload.manual_start = changes.manualStart;
+  if(changes.manualEnd !== undefined) payload.manual_end = changes.manualEnd;
+  const {error} = await supabaseClient.from('sessions').update(payload)
+    .eq('id', sessionId).eq('employee_id', employeeId);
   if(error) throw error;
 }
 
@@ -614,13 +638,15 @@ function renderEmployee(){
   const taskOptions = getTaskOptions(currentUser.id);
   const empConfig = config.employees.find(e=>e.id===currentUser.id);
   const canLogSalidas = !!(empConfig && empConfig.canLogSalidas);
+  const myCompanies = getCompaniesFor(currentUser.id);
+  if(hasActive && activeTimer.company && !myCompanies.includes(activeTimer.company)) myCompanies.push(activeTimer.company);
 
-  if(pendingCompany===null) pendingCompany = hasActive ? activeTimer.company : config.companies[0];
+  if(pendingCompany===null) pendingCompany = hasActive ? activeTimer.company : myCompanies[0];
   if(pendingTask===null) pendingTask = hasActive ? (taskOptions.includes(activeTimer.task) ? activeTimer.task : (activeTimer.task ? OTRO_TASK : taskOptions[0])) : taskOptions[0];
   const isOtro = pendingTask === OTRO_TASK;
   const otroValue = (hasActive && isOtro) ? activeTimer.task : '';
 
-  const companyOptions = config.companies.map(c=>`<option value="${escapeHtml(c)}" ${pendingCompany===c?'selected':''}>${escapeHtml(c)}</option>`).join('');
+  const companyOptions = myCompanies.map(c=>`<option value="${escapeHtml(c)}" ${pendingCompany===c?'selected':''}>${escapeHtml(c)}</option>`).join('');
   const taskSelectOptions = taskOptions.concat([OTRO_TASK]).map(t=>`<option value="${escapeHtml(t)}" ${pendingTask===t?'selected':''}>${escapeHtml(t)}</option>`).join('');
 
   const todaysSessions = employeeSessionsCache.filter(s=>s.date===todayStr());
@@ -635,7 +661,7 @@ function renderEmployee(){
       <td class="mono">${formatHMS(s.seconds)}</td>
     </tr>`).join('');
 
-  const salidaCompanyOptions = config.companies.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  const salidaCompanyOptions = getCompaniesFor(currentUser.id).map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
 
   return `
   <div class="topbar">
@@ -845,8 +871,12 @@ function openEditSessionModal(empId, sessionId){
   const isOtro = !taskOptions.includes(session.task);
   const totalH = Math.floor(session.seconds/3600);
   const totalM = Math.floor((session.seconds%3600)/60);
+  const origStart = sessionStartTime(session)==='—' ? '' : sessionStartTime(session).slice(0,5);
+  const origEnd = sessionEndTime(session)==='—' ? '' : sessionEndTime(session).slice(0,5);
 
-  const companyOptionsHtml = config.companies.map(c=>`<option value="${escapeHtml(c)}" ${session.company===c?'selected':''}>${escapeHtml(c)}</option>`).join('');
+  const empCompanies = getCompaniesFor(empId);
+  if(session.company && !empCompanies.includes(session.company)) empCompanies.push(session.company);
+  const companyOptionsHtml = empCompanies.map(c=>`<option value="${escapeHtml(c)}" ${session.company===c?'selected':''}>${escapeHtml(c)}</option>`).join('');
   const taskOptionsHtml = taskOptions.concat([OTRO_TASK]).map(t=>{
     const selected = isOtro ? t===OTRO_TASK : t===session.task;
     return `<option value="${escapeHtml(t)}" ${selected?'selected':''}>${escapeHtml(t)}</option>`;
@@ -874,14 +904,24 @@ function openEditSessionModal(empId, sessionId){
         <label class="field-label">Detallá la tarea</label>
         <input type="text" id="edit-task-custom" value="${isOtro?escapeHtml(session.task):''}">
       </div>
+      <div class="grid-2">
+        <div class="field">
+          <label class="field-label">Hora de inicio</label>
+          <input type="time" id="edit-start" value="${origStart}">
+        </div>
+        <div class="field">
+          <label class="field-label">Hora de finalización</label>
+          <input type="time" id="edit-end" value="${origEnd}">
+        </div>
+      </div>
       <div class="field">
-        <label class="field-label">Duración</label>
+        <label class="field-label">Duración (se recalcula sola si cambiás las horas)</label>
         <div class="grid-2">
           <div><input type="number" id="edit-hours" min="0" value="${totalH}" placeholder="Horas"></div>
           <div><input type="number" id="edit-minutes" min="0" max="59" value="${totalM}" placeholder="Minutos"></div>
         </div>
       </div>
-      <div id="edit-error" class="error-msg" style="display:none;">Completá la tarea antes de guardar.</div>
+      <div id="edit-error" class="error-msg" style="display:none;"></div>
       <div class="controls-row">
         <button class="btn btn-outline" id="edit-cancel">Cancelar</button>
         <button class="btn btn-primary" id="edit-save">Guardar cambios</button>
@@ -892,21 +932,59 @@ function openEditSessionModal(empId, sessionId){
   document.getElementById('edit-task').onchange = (e)=>{
     document.getElementById('edit-task-custom-wrap').style.display = e.target.value===OTRO_TASK ? '' : 'none';
   };
+  const showEditError = (msg)=>{
+    const el = document.getElementById('edit-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+  };
+  const recalcFromTimes = ()=>{
+    const s = parseHHMM(document.getElementById('edit-start').value);
+    const e = parseHHMM(document.getElementById('edit-end').value);
+    if(s===null || e===null || e<=s) return;
+    const diff = e - s;
+    document.getElementById('edit-hours').value = Math.floor(diff/60);
+    document.getElementById('edit-minutes').value = diff % 60;
+  };
+  document.getElementById('edit-start').onchange = recalcFromTimes;
+  document.getElementById('edit-end').onchange = recalcFromTimes;
+
   document.getElementById('edit-cancel').onclick = ()=> overlay.remove();
   document.getElementById('edit-save').onclick = async ()=>{
+    document.getElementById('edit-error').style.display = 'none';
     const date = document.getElementById('edit-date').value || session.date;
     const company = document.getElementById('edit-company').value;
     let task = document.getElementById('edit-task').value;
     if(task === OTRO_TASK){
       const custom = document.getElementById('edit-task-custom').value.trim();
-      if(!custom){ document.getElementById('edit-error').style.display='block'; return; }
+      if(!custom){ showEditError('Completá la tarea antes de guardar.'); return; }
       task = custom;
     }
-    const hours = parseInt(document.getElementById('edit-hours').value,10) || 0;
-    const minutes = parseInt(document.getElementById('edit-minutes').value,10) || 0;
-    const seconds = Math.max(0, hours*3600 + minutes*60);
+    const startStr = document.getElementById('edit-start').value;
+    const endStr = document.getElementById('edit-end').value;
+    const changes = {date, company, task};
 
-    await updateSession(empId, sessionId, {date, company, task, seconds});
+    const timesChanged = startStr !== origStart || endStr !== origEnd;
+    if(timesChanged){
+      const s = parseHHMM(startStr);
+      const e = parseHHMM(endStr);
+      if(s===null || e===null){ showEditError('Completá la hora de inicio y la de finalización.'); return; }
+      if(e <= s){ showEditError('La hora de finalización tiene que ser posterior a la de inicio.'); return; }
+      changes.manualStart = startStr;
+      changes.manualEnd = endStr;
+      changes.seconds = (e - s) * 60;
+    }else{
+      const hours = parseInt(document.getElementById('edit-hours').value,10) || 0;
+      const minutes = parseInt(document.getElementById('edit-minutes').value,10) || 0;
+      const durationChanged = hours !== totalH || minutes !== totalM;
+      changes.seconds = durationChanged ? Math.max(0, hours*3600 + minutes*60) : session.seconds;
+    }
+
+    try{
+      await updateSession(empId, sessionId, changes);
+    }catch(err){
+      showEditError('No se pudo guardar: ' + (err.message || err));
+      return;
+    }
     overlay.remove();
     await loadAllSessions();
     render();
