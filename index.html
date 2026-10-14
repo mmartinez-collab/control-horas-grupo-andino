@@ -1,0 +1,1270 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Control Horas Grupo Andino</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
+
+:root{
+  --bg:#ECEAE3;
+  --surface:#FFFFFF;
+  --surface-alt:#E2DFD5;
+  --ink:#20241F;
+  --muted:#736E63;
+  --line:#D2CDC0;
+  --accent:#3E7C6E;      /* patina copper-green */
+  --accent-dark:#2C5B50;
+  --live:#C97A2B;        /* worksite amber, running timer */
+  --live-bg:#FBEEDD;
+  --danger:#B4432F;
+  --radius:10px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'IBM Plex Sans',sans-serif;
+  min-height:100vh;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size:28px 28px;
+  background-attachment:fixed;
+}
+#app{max-width:960px;margin:0 auto;padding:0 16px 60px;}
+
+.hazard-bar{
+  height:8px;width:100%;
+  background:repeating-linear-gradient(135deg, var(--ink) 0 14px, var(--live) 14px 28px);
+  margin-bottom:0;
+}
+.topbar{
+  display:flex;align-items:baseline;justify-content:space-between;
+  padding:22px 4px 18px;flex-wrap:wrap;gap:8px;
+}
+.brand{
+  font-family:'Big Shoulders Display',sans-serif;
+  font-weight:800;
+  font-size:30px;
+  letter-spacing:0.5px;
+  text-transform:uppercase;
+  color:var(--ink);
+}
+.brand span{color:var(--accent);}
+.who{
+  font-size:13px;color:var(--muted);
+  display:flex;align-items:center;gap:10px;
+}
+.who b{color:var(--ink);}
+.logout-btn{
+  border:1px solid var(--line);background:var(--surface);
+  color:var(--muted);font-size:12px;padding:6px 12px;border-radius:20px;
+  cursor:pointer;font-family:inherit;
+}
+.logout-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+.card{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:26px;
+  margin-bottom:22px;
+}
+.card h2{
+  font-family:'Big Shoulders Display',sans-serif;
+  font-size:22px;text-transform:uppercase;letter-spacing:0.5px;
+  margin:0 0 18px;color:var(--ink);
+}
+.eyebrow{
+  font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--muted);font-weight:600;margin-bottom:6px;
+}
+
+/* LOGIN */
+.login-wrap{
+  display:flex;align-items:center;justify-content:center;
+  min-height:80vh;
+}
+.login-card{max-width:420px;width:100%;text-align:center;}
+.login-card .brand{font-size:34px;justify-content:center;display:block;margin-bottom:4px;}
+.login-sub{color:var(--muted);font-size:14px;margin-bottom:26px;}
+.tabs{display:flex;border:1px solid var(--line);border-radius:20px;overflow:hidden;margin-bottom:20px;}
+.tab{flex:1;padding:9px 0;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);background:var(--surface);}
+.tab.active{background:var(--ink);color:#fff;}
+input[type=email],input[type=text],input[type=date],input[type=time],input[type=number],input[type=password],select,textarea{
+  width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;
+  font-family:inherit;font-size:14px;background:var(--bg);color:var(--ink);
+}
+textarea{resize:vertical;min-height:70px;}
+label.field-label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px;font-weight:600;}
+.field{margin-bottom:16px;text-align:left;}
+.btn{
+  border:none;border-radius:8px;padding:12px 20px;font-family:inherit;
+  font-weight:600;font-size:14px;cursor:pointer;
+}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent-dark);}
+.btn-primary:disabled{background:#B7C7C2;cursor:not-allowed;}
+.btn-full{width:100%;}
+.btn-outline{background:transparent;border:1px solid var(--line);color:var(--ink);}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent);}
+.btn-danger{background:transparent;border:1px solid var(--danger);color:var(--danger);}
+.error-msg{background:#F7E4E0;color:var(--danger);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px;text-align:left;}
+.hint-msg{background:var(--surface-alt);color:var(--muted);border-radius:8px;padding:10px 12px;font-size:12.5px;margin-top:14px;text-align:left;}
+
+/* TICKET / TIMER */
+.ticket{
+  border:2px dashed var(--line);
+  border-radius:12px;
+  padding:26px 20px;
+  text-align:center;
+  background:
+    radial-gradient(circle 6px at 0 50%, var(--bg) 6px, transparent 0),
+    radial-gradient(circle 6px at 100% 50%, var(--bg) 6px, transparent 0),
+    var(--surface);
+  position:relative;
+  margin-bottom:18px;
+}
+.ticket.running{border-color:var(--live);background-color:var(--live-bg);}
+.ticket-company{
+  font-family:'Big Shoulders Display',sans-serif;
+  font-size:20px;text-transform:uppercase;letter-spacing:0.5px;
+  color:var(--muted);margin-bottom:4px;
+}
+.ticket.running .ticket-company{color:var(--live);}
+.ticket-clock{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:52px;font-weight:600;letter-spacing:2px;color:var(--ink);
+  margin:6px 0 16px;
+}
+.ticket-status{font-size:12px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px;}
+.status-dot.live{background:var(--live);box-shadow:0 0 0 4px rgba(201,122,43,0.18);}
+
+.controls-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}
+.controls-row .btn{flex:1;min-width:120px;}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px;}
+th{
+  text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;
+  color:var(--muted);padding:8px 10px;border-bottom:2px solid var(--line);
+}
+td{padding:10px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+.detail-text{color:var(--muted);font-size:12.5px;}
+.pill{
+  display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;
+  background:var(--surface-alt);color:var(--ink);font-weight:600;
+}
+.mono{font-family:'IBM Plex Mono',monospace;}
+.empty-state{color:var(--muted);font-size:13.5px;text-align:center;padding:24px 10px;}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+@media(max-width:640px){.grid-2,.grid-3{grid-template-columns:1fr;}}
+
+.emp-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);}
+.emp-row:last-child{border-bottom:none;}
+.emp-name{width:170px;flex-shrink:0;font-weight:600;font-size:13.5px;}
+.emp-row input{flex:1;}
+.small-btn{padding:8px 12px;font-size:12.5px;border-radius:6px;}
+
+.summary-box{
+  background:var(--surface-alt);border-radius:8px;padding:14px 16px;
+  display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;
+}
+.summary-box .label{font-size:13px;font-weight:600;}
+.summary-box .value{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px;color:var(--accent-dark);}
+
+.tag-remove{cursor:pointer;color:var(--danger);font-size:12px;margin-left:8px;}
+.add-inline{display:flex;gap:8px;margin-top:10px;}
+.add-inline input{flex:1;}
+.chip-list{display:flex;flex-wrap:wrap;gap:8px;}
+.chip{
+  background:var(--surface-alt);border-radius:20px;padding:6px 12px;font-size:12.5px;
+  display:flex;align-items:center;
+}
+.filters-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;align-items:flex-end;}
+.filters-row .field{margin-bottom:0;min-width:140px;flex:1;}
+</style>
+</head>
+<body>
+<div class="hazard-bar"></div>
+<div id="app"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+const SUPABASE_URL = "https://zkodxwvvcjvssgekvlcr.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_R7t1Cy97tfITeY1aBk1dIA_GoMxAsbF";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+const DEFAULT_EMPLOYEE_NAMES = ["Andrea Posatini","Andrea Marquez","Osvaldo Garcia","Alexis Lopez","Rosana Delgado"];
+const DEFAULT_COMPANIES = ["Viento Andino","Viñas Marsili","Diamante Giuliani","Paramassi","Arcoiris","Grupo Andino"];
+
+/* Tareas por rol, según el organigrama del área de Administración y Contabilidad.
+   Cada empleado ve las tareas de su puesto + la opción "Otro" para cargar una tarea libre. */
+const ROLE_TASKS = {
+  contador2: [
+    "Flujo de fondos / cash flow",
+    "Supervisión de liquidación de sueldos",
+    "Auditoria contable de info. modulo Ventas-Tesoreria-Compras en Tango",
+    "Balances",
+    "Inspecciones",
+    "Calificaciones bancarias",
+    "Liquidación de impuestos"
+  ],
+  administrativo_senior: [
+    "Supervisión de carga de comprobantes",
+    "Carga de comprobantes",
+    "Verificación de pagos y comprobantes",
+    "Conciliaciones bancarias",
+    "Conciliación de cuentas corrientes",
+    "Armado de papeles de trabajo",
+    "Auditoría de retenciones",
+    "Resolución de inconsistencias de facturación"
+  ],
+  rrhh: [
+    "Liquidación de sueldos",
+    "Control de horas",
+    "Boletas sindicales",
+    "Embargos y cuotas alimentarias",
+    "Inspecciones",
+    "F.931"
+  ],
+  auxiliar: [
+    "Carga de facturas",
+    "Saldos proveedores",
+    "Archivo físico y digital"
+  ],
+  general: [
+    "Tarea administrativa",
+    "Atención de consultas",
+    "Reunión / coordinación"
+  ]
+};
+const OTRO_TASK = "Otro";
+/* Puesto de cada empleado según el organigrama. Los que no figuran acá usan la lista "general". */
+const EMP_ROLE_BY_ID = {
+  rosana_delgado: 'contador2',
+  andrea_posatini: 'administrativo_senior',
+  osvaldo_garcia: 'rrhh',
+  andrea_marquez: 'auxiliar',
+  alexis_lopez: 'auxiliar'
+};
+function getTaskOptions(empId){
+  const role = EMP_ROLE_BY_ID[empId] || 'general';
+  return ROLE_TASKS[role] || ROLE_TASKS.general;
+}
+
+let config = null;
+let currentUser = null; // {role:'admin'|'employee', id, name, email}
+let activeTimer = null; // {company, accumulatedSeconds, running, lastResumeTs}
+let tickHandle = null;
+let loginTab = 'employee';
+let loginError = '';
+let adminReportFilters = null; // set on entering admin reports
+
+function slugify(str){
+  return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+}
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function niceDate(str){
+  const [y,m,d] = str.split('-');
+  return d+'/'+m+'/'+y;
+}
+function parseHHMM(str){
+  if(!str) return null;
+  const [h,m] = str.split(':').map(Number);
+  if(isNaN(h) || isNaN(m)) return null;
+  return h*60+m;
+}
+function formatHMS(totalSeconds){
+  totalSeconds = Math.max(0, Math.round(totalSeconds));
+  const h = Math.floor(totalSeconds/3600);
+  const m = Math.floor((totalSeconds%3600)/60);
+  const s = totalSeconds%60;
+  return [h,m,s].map(v=>String(v).padStart(2,'0')).join(':');
+}
+function formatHoursShort(totalSeconds){
+  const h = totalSeconds/3600;
+  return h.toFixed(2)+' h';
+}
+function formatTimeAR(iso){
+  if(!iso) return '—';
+  try{
+    return new Intl.DateTimeFormat('es-AR', {
+      hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false,
+      timeZone:'America/Argentina/Buenos_Aires'
+    }).format(new Date(iso));
+  }catch(e){ return '—'; }
+}
+function sessionStartTime(s){
+  return s.manualStart || formatTimeAR(s.startedAt);
+}
+function sessionEndTime(s){
+  return s.manualEnd || formatTimeAR(s.endedAt);
+}
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function loadConfig(){
+  const {data: companies, error: compError} = await supabaseClient
+    .from('companies').select('name').order('name');
+  if(compError) throw compError;
+
+  let employees = [];
+  if(currentUser && currentUser.role === 'admin'){
+    const {data, error} = await supabaseClient
+      .from('employees')
+      .select('id,name,email,can_log_salidas,active')
+      .order('name');
+    if(error) throw error;
+    employees = (data || []).map(e=>({
+      id:e.id, name:e.name, email:e.email || '', canLogSalidas:!!e.can_log_salidas, active:e.active!==false
+    }));
+  }else if(currentUser && currentUser.role === 'employee'){
+    employees = [{
+      id:currentUser.id,
+      name:currentUser.name,
+      email:currentUser.email || '',
+      canLogSalidas:!!currentUser.canLogSalidas
+    }];
+  }
+
+  config = {
+    employees,
+    companies:(companies || []).map(c=>c.name)
+  };
+}
+
+function mapSessionRow(s){
+  return {
+    id:s.id,
+    date:s.work_date,
+    company:s.company,
+    task:s.task,
+    seconds:Number(s.seconds || 0),
+    detail:s.detail || '',
+    place:s.place || '',
+    manualStart:s.manual_start ? String(s.manual_start).slice(0,5) : null,
+    manualEnd:s.manual_end ? String(s.manual_end).slice(0,5) : null,
+    startedAt:s.started_at || null,
+    endedAt:s.ended_at || null
+  };
+}
+
+async function getSessions(employeeId){
+  if(currentUser && currentUser.role === 'admin'){
+    const {data, error} = await supabaseClient
+      .from('sessions')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .order('work_date', {ascending:false});
+    if(error) throw error;
+    return (data || []).map(mapSessionRow);
+  }
+
+  const {data, error} = await supabaseClient.rpc('employee_get_sessions_v2', {
+    p_email: currentUser.email
+  });
+  if(error) throw error;
+  return (data || []).map(mapSessionRow);
+}
+
+async function insertSession(session){
+  if(currentUser.role === 'admin'){
+    const {error} = await supabaseClient.from('sessions').insert({
+      employee_id: session.employeeId,
+      company: session.company,
+      task: session.task,
+      work_date: session.date,
+      seconds: session.seconds,
+      detail: session.detail || '',
+      place: session.place || null,
+      manual_start: session.manualStart || null,
+      manual_end: session.manualEnd || null,
+      started_at: session.startedAt || null,
+      ended_at: session.endedAt || null
+    });
+    if(error) throw error;
+    return;
+  }
+  const {error} = await supabaseClient.rpc('employee_insert_session_v2', {
+    p_email: currentUser.email,
+    p_company: session.company,
+    p_task: session.task,
+    p_work_date: session.date,
+    p_seconds: session.seconds,
+    p_detail: session.detail || '',
+    p_place: session.place || null,
+    p_manual_start: session.manualStart || null,
+    p_manual_end: session.manualEnd || null,
+    p_started_at: session.startedAt || null,
+    p_ended_at: session.endedAt || null
+  });
+  if(error) throw error;
+}
+
+async function updateSession(employeeId, sessionId, changes){
+  const {error} = await supabaseClient.from('sessions').update({
+    work_date: changes.date,
+    company: changes.company,
+    task: changes.task,
+    seconds: changes.seconds
+  }).eq('id', sessionId).eq('employee_id', employeeId);
+  if(error) throw error;
+}
+
+async function deleteSession(employeeId, sessionId){
+  const {error} = await supabaseClient.from('sessions')
+    .delete().eq('id', sessionId).eq('employee_id', employeeId);
+  if(error) throw error;
+}
+
+async function getActive(employeeId){
+  const {data, error} = await supabaseClient.rpc('employee_get_active_v2', {
+    p_email: currentUser.email
+  });
+  if(error) throw error;
+  const row = data && data[0];
+  if(!row) return null;
+  return {
+    company: row.company,
+    task: row.task,
+    accumulatedSeconds: Number(row.accumulated_seconds || 0),
+    running: !!row.running,
+    lastResumeTs: row.last_resume_ts ? new Date(row.last_resume_ts).getTime() : Date.now(),
+    startDate: row.start_date,
+    startedAt: row.started_at || null
+  };
+}
+
+async function saveActive(employeeId, obj){
+  if(obj===null){
+    const {error} = await supabaseClient.rpc('employee_delete_active', {p_email: currentUser.email});
+    if(error) throw error;
+    return;
+  }
+  const {error} = await supabaseClient.rpc('employee_save_active_v2', {
+    p_email: currentUser.email,
+    p_company: obj.company,
+    p_task: obj.task,
+    p_accumulated_seconds: obj.accumulatedSeconds,
+    p_running: obj.running,
+    p_last_resume_ts: new Date(obj.lastResumeTs).toISOString(),
+    p_start_date: obj.startDate,
+    p_started_at: obj.startedAt || null
+  });
+  if(error) throw error;
+}
+
+function elapsedSeconds(){
+  if(!activeTimer) return 0;
+  let sec = activeTimer.accumulatedSeconds;
+  if(activeTimer.running){
+    sec += (Date.now() - activeTimer.lastResumeTs)/1000;
+  }
+  return sec;
+}
+
+function render(){
+  const app = document.getElementById('app');
+  if(!currentUser){
+    app.innerHTML = renderLogin();
+    attachLoginEvents();
+  }else if(currentUser.role==='admin'){
+    app.innerHTML = renderAdmin();
+    attachAdminEvents();
+  }else{
+    app.innerHTML = renderEmployee();
+    attachEmployeeEvents();
+  }
+}
+
+/* ---------------- LOGIN ---------------- */
+function renderLogin(){
+  return `
+  <div class="login-wrap">
+    <div class="card login-card">
+      <div class="brand">CONTROL HORAS<span> GRUPO ANDINO</span></div>
+      <div class="login-sub">Registro de horas trabajadas por empresa</div>
+      <div class="tabs">
+        <div class="tab ${loginTab==='employee'?'active':''}" data-tab="employee">Soy empleado/a</div>
+        <div class="tab ${loginTab==='admin'?'active':''}" data-tab="admin">Soy administrador/a</div>
+      </div>
+      ${loginError ? `<div class="error-msg">${escapeHtml(loginError)}</div>` : ''}
+      <div class="field">
+        <label class="field-label">Tu email</label>
+        <input type="email" id="login-email" placeholder="nombre@empresa.com">
+      </div>
+      ${loginTab==='admin' ? `
+      <div class="field">
+        <label class="field-label">Contraseña</label>
+        <input type="password" id="login-password" placeholder="••••••••">
+      </div>` : ''}
+      <button class="btn btn-primary btn-full" id="login-btn">Ingresar</button>
+    </div>
+  </div>`;
+}
+function attachLoginEvents(){
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.onclick = ()=>{ loginTab = t.dataset.tab; loginError=''; render(); };
+  });
+  document.getElementById('login-btn').onclick = async ()=>{
+    const emailRaw = document.getElementById('login-email').value.trim();
+    const email = emailRaw.toLowerCase();
+    if(!email || !email.includes('@')){ loginError = 'Ingresá un email válido.'; render(); return; }
+
+    try{
+      if(loginTab==='admin'){
+        const password = document.getElementById('login-password').value;
+        if(!password){ loginError = 'Ingresá tu contraseña.'; render(); return; }
+
+        const {data: authData, error: authError} = await supabaseClient.auth.signInWithPassword({email, password});
+        if(authError) throw authError;
+
+        const {data: adminRow, error: adminError} = await supabaseClient
+          .from('admins').select('email').eq('auth_user_id', authData.user.id).maybeSingle();
+        if(adminError || !adminRow){
+          await supabaseClient.auth.signOut();
+          loginError = 'Este usuario no tiene permiso de administrador.';
+          render();
+          return;
+        }
+
+        currentUser = {role:'admin', email: authData.user.email};
+        loginError='';
+        await loadConfig();
+        await loadAllSessions();
+        render();
+      }else{
+        const {data, error} = await supabaseClient.rpc('employee_login', {p_email: email});
+        if(error) throw error;
+        const emp = data && data[0];
+        if(!emp){
+          loginError = 'Tu email todavía no está vinculado a ningún empleado. Pedile al administrador que lo cargue.';
+          render();
+          return;
+        }
+        currentUser = {
+          role:'employee', id:emp.id, name:emp.name, email:emp.email,
+          canLogSalidas:!!emp.can_log_salidas
+        };
+        loginError='';
+        await loadConfig();
+        activeTimer = await getActive(emp.id);
+        await refreshEmployeeSessions();
+        render();
+        startTicking();
+      }
+    }catch(e){
+      console.error(e);
+      loginError = loginTab==='admin' ? 'Email o contraseña incorrectos.' : 'No se pudo ingresar. Intentá nuevamente.';
+      render();
+    }
+  };
+}
+
+async function logout(){
+  stopTicking();
+  if(currentUser && currentUser.role==='admin'){
+    try{ await supabaseClient.auth.signOut(); }catch(e){}
+  }
+  currentUser = null;
+  activeTimer = null;
+  loginError='';
+  pendingCompany = null;
+  pendingTask = null;
+  await loadConfig();
+  render();
+}
+
+/* ---------------- EMPLOYEE VIEW ---------------- */
+function startTicking(){
+  stopTicking();
+  tickHandle = setInterval(()=>{
+    if(activeTimer && activeTimer.running){
+      const el = document.getElementById('clock-display');
+      if(el) el.textContent = formatHMS(elapsedSeconds());
+    }
+  }, 1000);
+}
+function stopTicking(){
+  if(tickHandle){ clearInterval(tickHandle); tickHandle = null; }
+}
+
+let employeeSessionsCache = [];
+async function refreshEmployeeSessions(){
+  employeeSessionsCache = await getSessions(currentUser.id);
+}
+let pendingCompany = null;
+let pendingTask = null;
+
+function renderEmployee(){
+  const isRunning = activeTimer && activeTimer.running;
+  const hasActive = !!activeTimer;
+  const taskOptions = getTaskOptions(currentUser.id);
+  const empConfig = config.employees.find(e=>e.id===currentUser.id);
+  const canLogSalidas = !!(empConfig && empConfig.canLogSalidas);
+
+  if(pendingCompany===null) pendingCompany = hasActive ? activeTimer.company : config.companies[0];
+  if(pendingTask===null) pendingTask = hasActive ? (taskOptions.includes(activeTimer.task) ? activeTimer.task : (activeTimer.task ? OTRO_TASK : taskOptions[0])) : taskOptions[0];
+  const isOtro = pendingTask === OTRO_TASK;
+  const otroValue = (hasActive && isOtro) ? activeTimer.task : '';
+
+  const companyOptions = config.companies.map(c=>`<option value="${escapeHtml(c)}" ${pendingCompany===c?'selected':''}>${escapeHtml(c)}</option>`).join('');
+  const taskSelectOptions = taskOptions.concat([OTRO_TASK]).map(t=>`<option value="${escapeHtml(t)}" ${pendingTask===t?'selected':''}>${escapeHtml(t)}</option>`).join('');
+
+  const todaysSessions = employeeSessionsCache.filter(s=>s.date===todayStr());
+  const totalToday = todaysSessions.reduce((a,s)=>a+s.seconds,0);
+  const anyPlaceToday = todaysSessions.some(s=>s.place);
+
+  const rows = todaysSessions.slice().reverse().map(s=>`
+    <tr>
+      <td><span class="pill">${escapeHtml(s.company)}</span></td>
+      <td>${escapeHtml(s.task||'—')}${s.manualStart ? ` <span class="detail-text">(${s.manualStart}–${s.manualEnd})</span>` : ''}</td>
+      ${anyPlaceToday ? `<td class="detail-text">${escapeHtml(s.place||'—')}</td>` : ''}
+      <td class="mono">${formatHMS(s.seconds)}</td>
+    </tr>`).join('');
+
+  const salidaCompanyOptions = config.companies.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+
+  return `
+  <div class="topbar">
+    <div class="brand">CONTROL HORAS<span> GRUPO ANDINO</span></div>
+    <div class="who"><b>${escapeHtml(currentUser.name)}</b> · empleado/a <button class="logout-btn" id="logout-btn">Salir</button></div>
+  </div>
+
+  <div class="card">
+    <div class="field">
+      <label class="field-label">Empresa</label>
+      <select id="company-select" ${hasActive?'disabled':''}>${companyOptions}</select>
+    </div>
+    <div class="field">
+      <label class="field-label">Tarea</label>
+      <select id="task-select" ${hasActive?'disabled':''}>${taskSelectOptions}</select>
+    </div>
+    ${isOtro ? `
+    <div class="field">
+      <label class="field-label">Detallá la tarea</label>
+      <input type="text" id="task-custom-input" placeholder="Escribí la tarea" value="${escapeHtml(otroValue)}" ${hasActive?'disabled':''}>
+      <div id="task-error" class="error-msg" style="display:none;margin-top:8px;">Escribí la tarea antes de iniciar.</div>
+    </div>` : ''}
+
+    <div class="ticket ${isRunning?'running':''}">
+      <div class="ticket-company">${hasActive ? escapeHtml(activeTimer.company)+' · '+escapeHtml(activeTimer.task) : 'Sin turno iniciado'}</div>
+      <div class="ticket-clock" id="clock-display">${formatHMS(elapsedSeconds())}</div>
+      <div class="ticket-status"><span class="status-dot ${isRunning?'live':''}"></span>${hasActive ? (isRunning?'En curso':'En pausa') : 'Listo para empezar'}</div>
+    </div>
+
+    <div class="controls-row">
+      ${!hasActive ? `<button class="btn btn-primary" id="start-btn">▶ Iniciar</button>` : ''}
+      ${hasActive && isRunning ? `<button class="btn btn-outline" id="pause-btn">⏸ Pausar</button>` : ''}
+      ${hasActive && !isRunning ? `<button class="btn btn-primary" id="resume-btn">▶ Reanudar</button>` : ''}
+      ${hasActive ? `<button class="btn btn-danger" id="finish-btn">■ Finalizar y guardar</button>` : ''}
+    </div>
+  </div>
+
+  ${canLogSalidas ? `
+  <div class="card">
+    <h2>Salidas / trámites</h2>
+    <div class="eyebrow">Para cargar un tramo que ya pasó (por ejemplo, un trámite antes de llegar a la oficina), con horario, lugar y detalle.</div>
+    <div class="grid-2">
+      <div class="field"><label class="field-label">Fecha</label><input type="date" id="salida-date" value="${todayStr()}"></div>
+      <div class="field"><label class="field-label">Empresa</label><select id="salida-company">${salidaCompanyOptions}</select></div>
+      <div class="field"><label class="field-label">Hora de inicio</label><input type="time" id="salida-start"></div>
+      <div class="field"><label class="field-label">Hora de fin</label><input type="time" id="salida-end"></div>
+    </div>
+    <div class="field">
+      <label class="field-label">Lugar</label>
+      <input type="text" id="salida-place" placeholder="Ej: Banco Nación, ANSES, correo...">
+    </div>
+    <div class="field">
+      <label class="field-label">Detalle</label>
+      <textarea id="salida-detail" placeholder="Ej: Presentación de documentación, pago de tasas..."></textarea>
+    </div>
+    <div id="salida-error" class="error-msg" style="display:none;"></div>
+    <button class="btn btn-primary btn-full" id="salida-save-btn">Guardar salida</button>
+  </div>` : ''}
+
+  <div class="card">
+    <h2>Hoy · ${niceDate(todayStr())}</h2>
+    <div class="summary-box">
+      <div class="label">Total trabajado hoy</div>
+      <div class="value">${formatHMS(totalToday)}</div>
+    </div>
+    ${todaysSessions.length===0 ? `<div class="empty-state">Todavía no cargaste turnos hoy.</div>` : `
+    <table>
+      <thead><tr><th>Empresa</th><th>Tarea</th>${anyPlaceToday?'<th>Lugar</th>':''}<th>Duración</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`}
+  </div>
+  `;
+}
+
+function attachEmployeeEvents(){
+  document.getElementById('logout-btn').onclick = logout;
+
+  const companySelect = document.getElementById('company-select');
+  if(companySelect) companySelect.onchange = ()=>{ pendingCompany = companySelect.value; };
+
+  const taskSelect = document.getElementById('task-select');
+  if(taskSelect) taskSelect.onchange = ()=>{ pendingTask = taskSelect.value; render(); };
+
+  const startBtn = document.getElementById('start-btn');
+  if(startBtn) startBtn.onclick = async ()=>{
+    const company = document.getElementById('company-select').value;
+    let task = document.getElementById('task-select').value;
+    if(task === OTRO_TASK){
+      const customInput = document.getElementById('task-custom-input');
+      const custom = customInput.value.trim();
+      if(!custom){
+        document.getElementById('task-error').style.display = 'block';
+        customInput.focus();
+        return;
+      }
+      task = custom;
+    }
+    activeTimer = {company, task, accumulatedSeconds:0, running:true, lastResumeTs: Date.now(), startDate: todayStr(), startedAt: new Date().toISOString()};
+    await saveActive(currentUser.id, activeTimer);
+    pendingCompany = null; pendingTask = null;
+    render(); startTicking();
+  };
+  const pauseBtn = document.getElementById('pause-btn');
+  if(pauseBtn) pauseBtn.onclick = async ()=>{
+    activeTimer.accumulatedSeconds = elapsedSeconds();
+    activeTimer.running = false;
+    await saveActive(currentUser.id, activeTimer);
+    render();
+  };
+  const resumeBtn = document.getElementById('resume-btn');
+  if(resumeBtn) resumeBtn.onclick = async ()=>{
+    activeTimer.running = true;
+    activeTimer.lastResumeTs = Date.now();
+    await saveActive(currentUser.id, activeTimer);
+    render();
+  };
+  const finishBtn = document.getElementById('finish-btn');
+  if(finishBtn) finishBtn.onclick = async ()=>{
+    await finishSession();
+  };
+
+  const salidaBtn = document.getElementById('salida-save-btn');
+  if(salidaBtn) salidaBtn.onclick = async ()=>{
+    const errorEl = document.getElementById('salida-error');
+    errorEl.style.display = 'none';
+    const date = document.getElementById('salida-date').value;
+    const company = document.getElementById('salida-company').value;
+    const startStr = document.getElementById('salida-start').value;
+    const endStr = document.getElementById('salida-end').value;
+    const place = document.getElementById('salida-place').value.trim();
+    const detail = document.getElementById('salida-detail').value.trim();
+
+    const startMin = parseHHMM(startStr);
+    const endMin = parseHHMM(endStr);
+
+    if(!date || startMin===null || endMin===null){
+      errorEl.textContent = 'Completá la fecha y las dos horas.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    if(endMin <= startMin){
+      errorEl.textContent = 'La hora de fin tiene que ser posterior a la de inicio.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    if(!place){
+      errorEl.textContent = 'Contá el lugar al que fuiste.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    const seconds = (endMin - startMin) * 60;
+    await insertSession({
+      date, company, task:'Salida / trámite', seconds, detail, place,
+      manualStart:startStr, manualEnd:endStr
+    });
+    await refreshEmployeeSessions();
+    render();
+  };
+}
+
+async function finishSession(){
+  const totalSec = Math.round(elapsedSeconds());
+  await insertSession({
+    date: activeTimer.startDate || todayStr(),
+    company: activeTimer.company,
+    task: activeTimer.task,
+    seconds: totalSec,
+    detail: '',
+    startedAt: activeTimer.startedAt || null,
+    endedAt: new Date().toISOString()
+  });
+  activeTimer = null;
+  pendingCompany = null; pendingTask = null;
+  await saveActive(currentUser.id, null);
+  await refreshEmployeeSessions();
+  render();
+}
+
+function openConfirmModal(title, message, onConfirm){
+  const overlay = document.createElement('div');
+  overlay.setAttribute('style','position:fixed;inset:0;background:rgba(32,36,31,0.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;');
+  overlay.innerHTML = `
+    <div class="card" style="max-width:400px;width:100%;margin:0;">
+      <h2>${escapeHtml(title)}</h2>
+      <p style="color:var(--muted);font-size:13.5px;margin:0 0 20px;">${escapeHtml(message)}</p>
+      <div class="controls-row">
+        <button class="btn btn-outline" id="confirm-cancel">Cancelar</button>
+        <button class="btn btn-danger" id="confirm-ok">Sí, quitar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('confirm-cancel').onclick = ()=> overlay.remove();
+  document.getElementById('confirm-ok').onclick = async ()=>{
+    overlay.remove();
+    await onConfirm();
+  };
+}
+
+function openEditSessionModal(empId, sessionId){
+  const emp = config.employees.find(e=>e.id===empId);
+  if(!emp) return;
+  const sessions = allSessionsCache[empId] || [];
+  const session = sessions.find(s=>s.id===sessionId);
+  if(!session) return;
+
+  const taskOptions = getTaskOptions(empId);
+  const isOtro = !taskOptions.includes(session.task);
+  const totalH = Math.floor(session.seconds/3600);
+  const totalM = Math.floor((session.seconds%3600)/60);
+
+  const companyOptionsHtml = config.companies.map(c=>`<option value="${escapeHtml(c)}" ${session.company===c?'selected':''}>${escapeHtml(c)}</option>`).join('');
+  const taskOptionsHtml = taskOptions.concat([OTRO_TASK]).map(t=>{
+    const selected = isOtro ? t===OTRO_TASK : t===session.task;
+    return `<option value="${escapeHtml(t)}" ${selected?'selected':''}>${escapeHtml(t)}</option>`;
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.setAttribute('style','position:fixed;inset:0;background:rgba(32,36,31,0.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;');
+  overlay.innerHTML = `
+    <div class="card" style="max-width:460px;width:100%;margin:0;">
+      <h2>Editar registro</h2>
+      <div class="eyebrow">${escapeHtml(emp.name)}</div>
+      <div class="field">
+        <label class="field-label">Fecha</label>
+        <input type="date" id="edit-date" value="${session.date}">
+      </div>
+      <div class="field">
+        <label class="field-label">Empresa</label>
+        <select id="edit-company">${companyOptionsHtml}</select>
+      </div>
+      <div class="field">
+        <label class="field-label">Tarea</label>
+        <select id="edit-task">${taskOptionsHtml}</select>
+      </div>
+      <div class="field" id="edit-task-custom-wrap" style="${isOtro?'':'display:none;'}">
+        <label class="field-label">Detallá la tarea</label>
+        <input type="text" id="edit-task-custom" value="${isOtro?escapeHtml(session.task):''}">
+      </div>
+      <div class="field">
+        <label class="field-label">Duración</label>
+        <div class="grid-2">
+          <div><input type="number" id="edit-hours" min="0" value="${totalH}" placeholder="Horas"></div>
+          <div><input type="number" id="edit-minutes" min="0" max="59" value="${totalM}" placeholder="Minutos"></div>
+        </div>
+      </div>
+      <div id="edit-error" class="error-msg" style="display:none;">Completá la tarea antes de guardar.</div>
+      <div class="controls-row">
+        <button class="btn btn-outline" id="edit-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="edit-save">Guardar cambios</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  document.getElementById('edit-task').onchange = (e)=>{
+    document.getElementById('edit-task-custom-wrap').style.display = e.target.value===OTRO_TASK ? '' : 'none';
+  };
+  document.getElementById('edit-cancel').onclick = ()=> overlay.remove();
+  document.getElementById('edit-save').onclick = async ()=>{
+    const date = document.getElementById('edit-date').value || session.date;
+    const company = document.getElementById('edit-company').value;
+    let task = document.getElementById('edit-task').value;
+    if(task === OTRO_TASK){
+      const custom = document.getElementById('edit-task-custom').value.trim();
+      if(!custom){ document.getElementById('edit-error').style.display='block'; return; }
+      task = custom;
+    }
+    const hours = parseInt(document.getElementById('edit-hours').value,10) || 0;
+    const minutes = parseInt(document.getElementById('edit-minutes').value,10) || 0;
+    const seconds = Math.max(0, hours*3600 + minutes*60);
+
+    await updateSession(empId, sessionId, {date, company, task, seconds});
+    overlay.remove();
+    await loadAllSessions();
+    render();
+  };
+}
+
+/* ---------------- ADMIN VIEW ---------------- */
+let allSessionsCache = null;
+async function loadAllSessions(){
+  const map = {};
+  for(const emp of config.employees){
+    map[emp.id] = await getSessions(emp.id);
+  }
+  allSessionsCache = map;
+}
+
+function renderAdmin(){
+  const empRows = config.employees.filter(emp=>emp.active!==false).map(emp=>`
+    <div class="emp-row" style="flex-wrap:wrap;">
+      <div class="emp-name">${escapeHtml(emp.name)}</div>
+      <input type="email" placeholder="email@empresa.com" value="${escapeHtml(emp.email||'')}" data-emp-id="${emp.id}" class="emp-email-input">
+      <button class="btn btn-outline small-btn save-email-btn" data-emp-id="${emp.id}">Guardar</button>
+      <span class="tag-remove" data-remove-emp="${emp.id}">✕</span>
+      <label style="width:100%;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-top:4px;">
+        <input type="checkbox" class="salidas-toggle" data-emp-id="${emp.id}" ${emp.canLogSalidas?'checked':''}>
+        Puede cargar salidas/trámites con horario manual, lugar y detalle
+      </label>
+    </div>`).join('');
+
+  const companyChips = config.companies.map(c=>`
+    <span class="chip">${escapeHtml(c)}<span class="tag-remove" data-remove-company="${escapeHtml(c)}">✕</span></span>`).join('');
+
+  const filters = adminReportFilters || {employee:'all', company:'all', from: todayStr(), to: todayStr()};
+
+  const employeeOptions = `<option value="all">Todos los empleados</option>` + config.employees.map(e=>`<option value="${e.id}" ${filters.employee===e.id?'selected':''}>${escapeHtml(e.name)}</option>`).join('');
+  const companyOptions = `<option value="all">Todas las empresas</option>` + config.companies.map(c=>`<option value="${escapeHtml(c)}" ${filters.company===c?'selected':''}>${escapeHtml(c)}</option>`).join('');
+
+  let rowsHtml = '<div class="empty-state">Cargando registros…</div>';
+  let totalsHtml = '';
+  if(allSessionsCache){
+    let rows = [];
+    for(const emp of config.employees){
+      if(filters.employee!=='all' && filters.employee!==emp.id) continue;
+      const sessions = allSessionsCache[emp.id] || [];
+      for(const s of sessions){
+        if(s.date < filters.from || s.date > filters.to) continue;
+        if(filters.company!=='all' && s.company!==filters.company) continue;
+        rows.push({...s, empName: emp.name, empId: emp.id});
+      }
+    }
+    rows.sort((a,b)=> a.date===b.date ? b.seconds-a.seconds : (a.date<b.date?1:-1));
+
+    const totalsByEmp = {};
+    let grandTotal = 0;
+    rows.forEach(r=>{
+      const key = r.empName+'|'+r.company;
+      totalsByEmp[key] = (totalsByEmp[key]||0) + r.seconds;
+      grandTotal += r.seconds;
+    });
+    const totalKeys = Object.keys(totalsByEmp).sort();
+    totalsHtml = `
+      <div class="summary-box"><div class="label">Total del período</div><div class="value">${formatHMS(grandTotal)}</div></div>
+      ${totalKeys.map(k=>{
+        const [name,company] = k.split('|');
+        return `<div class="summary-box" style="background:transparent;border:1px solid var(--line);">
+          <div class="label">${escapeHtml(name)} · ${escapeHtml(company)}</div>
+          <div class="value">${formatHMS(totalsByEmp[k])}</div>
+        </div>`;
+      }).join('')}
+    `;
+
+    rowsHtml = rows.length===0 ? `<div class="empty-state">No hay registros para este filtro.</div>` : `
+      <table>
+        <thead><tr><th>Fecha</th><th>Empleado</th><th>Empresa</th><th>Tarea</th><th>Inicio</th><th>Fin</th><th>Lugar</th><th>Duración</th><th></th></tr></thead>
+        <tbody>
+          ${rows.map(r=>`
+            <tr>
+              <td>${niceDate(r.date)}</td>
+              <td>${escapeHtml(r.empName)}</td>
+              <td><span class="pill">${escapeHtml(r.company)}</span></td>
+              <td>${escapeHtml(r.task||'—')}</td>
+              <td class="mono">${sessionStartTime(r)}</td>
+              <td class="mono">${sessionEndTime(r)}</td>
+              <td class="detail-text">${escapeHtml(r.place||'—')}${r.detail ? `<br>${escapeHtml(r.detail)}` : ''}</td>
+              <td class="mono">${formatHMS(r.seconds)}</td>
+              <td style="white-space:nowrap;">
+                <span class="tag-remove" style="color:var(--accent-dark);" data-edit-session data-emp-id="${r.empId}" data-session-id="${r.id}" title="Editar">✎</span>
+                <span class="tag-remove" data-delete-session data-emp-id="${r.empId}" data-session-id="${r.id}" title="Borrar">✕</span>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  return `
+  <div class="topbar">
+    <div class="brand">CONTROL HORAS<span> GRUPO ANDINO</span></div>
+    <div class="who"><b>${escapeHtml(currentUser.email)}</b> · administrador/a <button class="logout-btn" id="logout-btn">Salir</button></div>
+  </div>
+
+  <div class="card">
+    <h2>Empleados y accesos</h2>
+    <div class="eyebrow">Vinculá el email de cada persona con su nombre para que pueda ingresar</div>
+    ${empRows}
+    <div class="add-inline">
+      <input type="text" id="new-emp-name" placeholder="Nombre y apellido del nuevo empleado">
+      <button class="btn btn-outline small-btn" id="add-emp-btn">Agregar empleado</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Empresas</h2>
+    <div class="chip-list">${companyChips}</div>
+    <div class="add-inline">
+      <input type="text" id="new-company-name" placeholder="Nombre de la nueva empresa">
+      <button class="btn btn-outline small-btn" id="add-company-btn">Agregar empresa</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Seguridad</h2>
+    <div class="eyebrow">Cambiar la contraseña de administrador</div>
+    <div class="grid-2">
+      <div class="field" style="margin-bottom:0;"><input type="password" id="new-admin-password" placeholder="Nueva contraseña"></div>
+      <div class="field" style="margin-bottom:0;"><button class="btn btn-outline btn-full" id="change-password-btn">Guardar contraseña</button></div>
+    </div>
+    <div id="password-changed-msg" style="display:none;" class="hint-msg">Contraseña actualizada ✓</div>
+  </div>
+
+  <div class="card">
+    <h2>Reporte de horas</h2>
+    <div class="filters-row">
+      <div class="field"><label class="field-label">Empleado</label><select id="filter-employee">${employeeOptions}</select></div>
+      <div class="field"><label class="field-label">Empresa</label><select id="filter-company">${companyOptions}</select></div>
+      <div class="field"><label class="field-label">Desde</label><input type="date" id="filter-from" value="${filters.from}"></div>
+      <div class="field"><label class="field-label">Hasta</label><input type="date" id="filter-to" value="${filters.to}"></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin:-4px 0 16px;">
+      <button class="btn btn-outline" id="export-excel-btn">⬇ Descargar Excel</button>
+    </div>
+    ${totalsHtml}
+    <div style="margin-top:14px;">${rowsHtml}</div>
+  </div>
+  `;
+}
+
+function getFilteredAdminRows(){
+  const filters = adminReportFilters || {employee:'all', company:'all', from: todayStr(), to: todayStr()};
+  const rows = [];
+  if(!allSessionsCache) return rows;
+  for(const emp of config.employees){
+    if(filters.employee!=='all' && filters.employee!==emp.id) continue;
+    for(const s of (allSessionsCache[emp.id] || [])){
+      if(s.date < filters.from || s.date > filters.to) continue;
+      if(filters.company!=='all' && s.company!==filters.company) continue;
+      rows.push({...s, empName:emp.name, empId:emp.id});
+    }
+  }
+  rows.sort((a,b)=> a.date===b.date ? (sessionStartTime(a) < sessionStartTime(b) ? -1 : 1) : (a.date<b.date?1:-1));
+  return rows;
+}
+
+function exportAdminExcel(){
+  const rows = getFilteredAdminRows();
+  if(!rows.length){
+    alert('No hay registros para exportar con los filtros actuales.');
+    return;
+  }
+  if(typeof XLSX === 'undefined'){
+    alert('No se pudo cargar el módulo de Excel. Recargá la página e intentá nuevamente.');
+    return;
+  }
+  const data = rows.map(r=>({
+    'Fecha': niceDate(r.date),
+    'Empleado': r.empName,
+    'Empresa': r.company,
+    'Tarea': r.task || '',
+    'Hora inicio': sessionStartTime(r)==='—' ? '' : sessionStartTime(r),
+    'Hora fin': sessionEndTime(r)==='—' ? '' : sessionEndTime(r),
+    'Duración': formatHMS(r.seconds),
+    'Horas decimales': Number((r.seconds/3600).toFixed(4)),
+    'Lugar': r.place || '',
+    'Detalle': r.detail || ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [
+    {wch:12},{wch:24},{wch:20},{wch:52},{wch:13},{wch:13},{wch:13},{wch:16},{wch:24},{wch:45}
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Horas');
+  const f = adminReportFilters || {from:todayStr(),to:todayStr()};
+  XLSX.writeFile(wb, `control_horas_${f.from}_${f.to}.xlsx`);
+}
+
+function attachAdminEvents(){
+  document.getElementById('logout-btn').onclick = logout;
+  const exportBtn = document.getElementById('export-excel-btn');
+  if(exportBtn) exportBtn.onclick = exportAdminExcel;
+
+  document.querySelectorAll('.save-email-btn').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.dataset.empId;
+      const input = document.querySelector(`.emp-email-input[data-emp-id="${id}"]`);
+      const email = input.value.trim().toLowerCase();
+      const {error} = await supabaseClient.from('employees').update({email: email || null}).eq('id', id);
+      if(error){ alert('No se pudo guardar el email: '+error.message); return; }
+      const emp = config.employees.find(e=>e.id===id);
+      if(emp) emp.email = email;
+      btn.textContent = 'Guardado ✓';
+      setTimeout(()=>{ btn.textContent='Guardar'; }, 1500);
+    };
+  });
+
+  document.querySelectorAll('.salidas-toggle').forEach(cb=>{
+    cb.onchange = async ()=>{
+      const emp = config.employees.find(e=>e.id===cb.dataset.empId);
+      if(!emp) return;
+      const {error} = await supabaseClient.from('employees').update({can_log_salidas:cb.checked}).eq('id', emp.id);
+      if(error){ alert('No se pudo guardar el permiso: '+error.message); cb.checked=!cb.checked; return; }
+      emp.canLogSalidas = cb.checked;
+    };
+  });
+
+  document.querySelectorAll('[data-remove-emp]').forEach(el=>{
+    el.onclick = ()=>{
+      const id = el.dataset.removeEmp;
+      const emp = config.employees.find(e=>e.id===id);
+      if(!emp) return;
+      openConfirmModal(
+        `¿Quitar a ${emp.name}?`,
+        'Ya no va a poder ingresar con su email. Sus registros de horas ya cargados no se borran.',
+        async ()=>{
+          const {error} = await supabaseClient.from('employees').update({active:false,email:null}).eq('id', id);
+          if(error){ alert('No se pudo quitar el empleado: '+error.message); return; }
+          await loadConfig();
+          await loadAllSessions();
+          render();
+        }
+      );
+    };
+  });
+
+  document.getElementById('add-emp-btn').onclick = async ()=>{
+    const nameInput = document.getElementById('new-emp-name');
+    const name = nameInput.value.trim();
+    if(!name) return;
+    let id = slugify(name);
+    if(config.employees.some(e=>e.id===id)) id = id+'_'+Date.now().toString(36).slice(-4);
+    const {error} = await supabaseClient.from('employees').insert({id, name, email:null, can_log_salidas:false, active:true});
+    if(error){ alert('No se pudo agregar el empleado: '+error.message); return; }
+    await loadConfig();
+    await loadAllSessions();
+    render();
+  };
+
+  document.querySelectorAll('[data-remove-company]').forEach(el=>{
+    el.onclick = ()=>{
+      const name = el.dataset.removeCompany;
+      openConfirmModal(
+        `¿Quitar ${name}?`,
+        'Los registros de horas ya cargados para esta empresa no se borran.',
+        async ()=>{
+          const {error} = await supabaseClient.from('companies').delete().eq('name', name);
+          if(error){ alert('No se pudo quitar la empresa: '+error.message); return; }
+          await loadConfig();
+          render();
+        }
+      );
+    };
+  });
+
+  document.getElementById('add-company-btn').onclick = async ()=>{
+    const nameInput = document.getElementById('new-company-name');
+    const name = nameInput.value.trim();
+    if(!name || config.companies.includes(name)) return;
+    const {error} = await supabaseClient.from('companies').insert({name});
+    if(error){ alert('No se pudo agregar la empresa: '+error.message); return; }
+    await loadConfig();
+    render();
+  };
+
+  document.getElementById('change-password-btn').onclick = async ()=>{
+    const input = document.getElementById('new-admin-password');
+    const value = input.value.trim();
+    if(!value) return;
+    const {error} = await supabaseClient.auth.updateUser({password:value});
+    if(error){ alert('No se pudo cambiar la contraseña: '+error.message); return; }
+    input.value = '';
+    document.getElementById('password-changed-msg').style.display = 'block';
+    setTimeout(()=>{
+      const msg = document.getElementById('password-changed-msg');
+      if(msg) msg.style.display = 'none';
+    }, 2500);
+  };
+
+  document.querySelectorAll('[data-edit-session]').forEach(el=>{
+    el.onclick = ()=>{
+      openEditSessionModal(el.dataset.empId, el.dataset.sessionId);
+    };
+  });
+
+  document.querySelectorAll('[data-delete-session]').forEach(el=>{
+    el.onclick = ()=>{
+      const empId = el.dataset.empId;
+      const sessionId = el.dataset.sessionId;
+      openConfirmModal(
+        '¿Borrar este registro?',
+        'Esta acción no se puede deshacer.',
+        async ()=>{
+          await deleteSession(empId, sessionId);
+          await loadAllSessions();
+          render();
+        }
+      );
+    };
+  });
+
+  const fEmp = document.getElementById('filter-employee');
+  const fCompany = document.getElementById('filter-company');
+  const fFrom = document.getElementById('filter-from');
+  const fTo = document.getElementById('filter-to');
+  const updateFilters = ()=>{
+    adminReportFilters = {
+      employee: fEmp.value, company: fCompany.value, from: fFrom.value, to: fTo.value
+    };
+    render();
+  };
+  fEmp.onchange = updateFilters;
+  fCompany.onchange = updateFilters;
+  fFrom.onchange = updateFilters;
+  fTo.onchange = updateFilters;
+}
+
+/* ---------------- INIT ---------------- */
+(async function init(){
+  document.getElementById('app').innerHTML = '<div class="login-wrap"><div class="card login-card">Cargando…</div></div>';
+  try{
+    const {data:{session}} = await supabaseClient.auth.getSession();
+    if(session && session.user){
+      const {data: adminRow} = await supabaseClient.from('admins')
+        .select('email').eq('auth_user_id', session.user.id).maybeSingle();
+      if(adminRow){
+        currentUser = {role:'admin', email:session.user.email};
+        await loadConfig();
+        await loadAllSessions();
+        render();
+        return;
+      }
+    }
+    await loadConfig();
+    render();
+  }catch(e){
+    console.error(e);
+    loginError = 'No se pudo conectar con la base de datos.';
+    config = {employees:[], companies:[]};
+    render();
+  }
+})();;
+</script>
+</body>
+</html>
